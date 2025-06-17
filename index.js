@@ -72,6 +72,7 @@ app.post("/webhook", async (req, res) => {
 
 
 function sendMessage(to, text) {
+    console.log("📤 Attempting to send WhatsApp message to", to);
   const axios = require("axios");
   axios.post(
     `https://graph.facebook.com/v19.0/${process.env.PHONE_NUMBER_ID}/messages`,
@@ -92,7 +93,7 @@ function sendMessage(to, text) {
     console.error("Error sending message:", err.response?.data || err.message);
   });
 }
-console.log("📤 Attempting to send WhatsApp message to", phone);
+
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Running on port ${PORT}`));
