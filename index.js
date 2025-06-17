@@ -1,0 +1,93 @@
+const express = require("express");
+const bodyParser = require("body-parser");
+const supabase = require("./supabaseClient"); // Assuming you have a supabaseClient.js file
+require("dotenv").config();
+
+const app = express();
+app.use(bodyParser.json());
+
+app.get("/webhook", (req, res) => {
+  const verify_token = process.env.VERIFY_TOKEN;
+
+  const mode = req.query["hub.mode"];
+  const token = req.query["hub.verify_token"];
+  const challenge = req.query["hub.challenge"];
+
+  if (mode && token && mode === "subscribe" && token === verify_token) {
+    console.log("WEBHOOK_VERIFIED");
+    res.status(200).send(challenge);
+  } else {
+    res.sendStatus(403);
+  }
+});
+
+
+app.post("/webhook", async (req, res) => {
+  const body = req.body;
+
+  if (body.object) {
+    const message = body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
+    const phone = message?.from;
+    const text = message?.text?.body?.toLowerCase();
+
+    if (text === "present") {
+      // 1. Get user by phone number
+      const { data: user, error: userError } = await supabase
+        .from("users")
+        .select("name")
+        .eq("phone", phone)
+        .single();
+
+      if (userError || !user) {
+        sendMessage(phone, "⚠️ Your number is not registered. Please contact admin.");
+        return res.sendStatus(200);
+      }
+
+      // 2. Save to attendance table
+      const { error } = await supabase.from("attendance").insert([
+        {
+          phone: phone,
+          name: user.name,
+          status: "present",
+        },
+      ]);
+
+      if (error) {
+        console.error("❌ Supabase insert error:", error.message);
+        return res.sendStatus(500);
+      }
+
+      // 3. Send reply with name
+      sendMessage(
+        phone,
+        `✅ ${user.name}, your attendance is marked!\n📸 Upload your selfie here: https://example.com/upload`
+      );
+    }
+
+    res.sendStatus(200);
+  } else {
+    res.sendStatus(404);
+  }
+});
+
+
+function sendMessage(to, text) {
+  const axios = require("axios");
+  axios.post(
+    `https://graph.facebook.com/v19.0/${process.env.PHONE_NUMBER_ID}/messages`,
+    {
+      messaging_product: "whatsapp",
+      to: to,
+      text: { body: text },
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
+        "Content-Type": "application/json",
+      },
+    }
+  );
+}
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Running on port ${PORT}`));
