@@ -86,8 +86,13 @@ function sendMessage(to, text) {
         "Content-Type": "application/json",
       },
     }
-  );
+  ).then(res => {
+    console.log("Message sent successfully:", res.data);
+  }).catch(err => {
+    console.error("Error sending message:", err.response?.data || err.message);
+  });
 }
+console.log("📤 Attempting to send WhatsApp message to", phone);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Running on port ${PORT}`));
