@@ -104,7 +104,7 @@ app.post("/webhook", async (req, res) => {
     }
     if (text === "view today") {
    //fetch role
-      const { data: user, error: userError } = await supabase
+      const { data: sender, error: senderError } = await supabase
         .from("users")
         .select("role")
         .eq("phone", phone)
