@@ -134,7 +134,7 @@ app.post("/webhook", async (req, res) => {
   const presentPhones = attendanceToday.map((a) => a.phone);
 
   // Build the message
-  let message = `📅 *Today's Attendance:*\n`;
+  let message = `📅 *Today's Attendance (${todayStr}):*\n`;
 
   users.forEach((user) => {
     if (presentPhones.includes(user.phone)) {
