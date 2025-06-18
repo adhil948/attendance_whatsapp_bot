@@ -30,45 +30,52 @@ app.post("/webhook", async (req, res) => {
     const phone = message?.from;
     const text = message?.text?.body?.toLowerCase();
 
-    if (text === "present") {
-      // 1. Get user by phone number
-      const { data: user, error: userError } = await supabase
-        .from("users")
-        .select("name")
-        .eq("phone", phone)
-        .single();
+    if (!text || !phone) return res.sendStatus(200);
 
-      if (userError || !user) {
-        sendMessage(phone, "⚠️ Your number is not registered. Please contact admin.");
+    // ✅ REGISTER Command
+    if (text.startsWith("register")) {
+      const name = message.text.body.slice(9).trim(); // Remove "register " and get the name
+
+      if (!name) {
+        sendMessage(phone, "⚠️ Please provide your name.\n\nFormat:\nregister Adil Shahan");
         return res.sendStatus(200);
       }
 
-      // 2. Save to attendance table
-      const { error } = await supabase.from("attendance").insert([
-        {
-          phone: phone,
-          name: user.name,
-          status: "present",
-        },
-      ]);
+      // Check if already registered
+      const { data: existingUser, error: userError } = await supabase
+        .from("users")
+        .select("*")
+        .eq("phone", phone)
+        .single();
 
-      if (error) {
-        console.error("❌ Supabase insert error:", error.message);
-        return res.sendStatus(500);
+      if (existingUser) {
+        sendMessage(phone, `⚠️ You're already registered as ${existingUser.name}`);
+        return res.sendStatus(200);
       }
 
-      // 3. Send reply with name
-      sendMessage(
-        phone,
-        `✅ ${user.name}, your attendance is marked!\n📸 Upload your selfie here: https://example.com/upload`
-      );
+      // Register the new user
+      const { error } = await supabase
+        .from("users")
+        .insert([{ name, phone }]);
+
+      if (error) {
+        console.error("❌ Registration failed:", error.message);
+        sendMessage(phone, "❌ Something went wrong while registering.");
+      } else {
+        sendMessage(phone, `✅ ${name}, you have been registered successfully!`);
+      }
+
+      return res.sendStatus(200);
     }
 
+    // Continue with existing logic like "present" here...
+    
     res.sendStatus(200);
   } else {
     res.sendStatus(404);
   }
 });
+
 
 
 function sendMessage(to, text) {
