@@ -147,7 +147,68 @@ app.post("/webhook", async (req, res) => {
   sendMessage(phone, message);
   return res.sendStatus(200);
 }
+  if (text.startsWith("summary")) {
+  const nameQuery = text.slice(7).trim(); // remove 'summary' and get the name
 
+  if (!nameQuery) {
+    sendMessage(phone, "⚠️ Please provide the employee's name.\n\nExample:\nsummary adil");
+    return res.sendStatus(200);
+  }
+
+  // 1. Get user by partial name match (case-insensitive)
+  const { data: user, error: userError } = await supabase
+    .from("users")
+    .select("name, phone")
+    .ilike("name", `%${nameQuery}%`)
+    .maybeSingle();
+
+  if (!user) {
+    sendMessage(phone, `❌ No user found with name "${nameQuery}"`);
+    return res.sendStatus(200);
+  }
+
+  const userPhone = user.phone;
+
+  // 2. Get current month range
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, "0");
+  const firstDay = `${yyyy}-${mm}-01`;
+  const lastDay = new Date(yyyy, today.getMonth() + 1, 0); // last date of month
+  const lastDayStr = `${yyyy}-${mm}-${String(lastDay.getDate()).padStart(2, "0")}`;
+
+  // 3. Get attendance records for that user this month
+  const { data: attendance, error: attError } = await supabase
+    .from("attendance")
+    .select("timestamp")
+    .eq("phone", userPhone)
+    .gte("timestamp", `${firstDay}T00:00:00`)
+    .lte("timestamp", `${lastDayStr}T23:59:59`);
+
+  if (attError) {
+    sendMessage(phone, "❌ Failed to fetch attendance data.");
+    return res.sendStatus(200);
+  }
+
+  // 4. Count unique present days
+  const presentDates = new Set(
+    attendance.map((a) => a.timestamp.split("T")[0]) // Extract date part
+  );
+
+  const presentCount = presentDates.size;
+  const totalDaysInMonth = lastDay.getDate(); // e.g. 30
+  const absentCount = totalDaysInMonth - presentCount; // optional: skip Sundays
+
+  // 5. Reply
+  sendMessage(
+    phone,
+    `📊 ${today.toLocaleString("default", { month: "long" })} Summary for ${user.name}:\n` +
+    `✅ Present Days: ${presentCount}\n` +
+    `❌ Absent Days: ${absentCount}`
+  );
+
+  return res.sendStatus(200);
+}
 
     res.sendStatus(200);
   } else {
