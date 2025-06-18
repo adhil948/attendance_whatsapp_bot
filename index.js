@@ -68,14 +68,45 @@ app.post("/webhook", async (req, res) => {
       return res.sendStatus(200);
     }
 
-    // Continue with existing logic like "present" here...
-    
+    if (text === "present") {
+      // 1. Get user by phone number
+      const { data: user, error: userError } = await supabase
+        .from("users")
+        .select("name")
+        .eq("phone", phone)
+        .single();
+
+      if (userError || !user) {
+        sendMessage(phone, "⚠️ Your number is not registered. Please contact admin.");
+        return res.sendStatus(200);
+      }
+
+      // 2. Save to attendance table
+      const { error } = await supabase.from("attendance").insert([
+        {
+          phone: phone,
+          name: user.name,
+          status: "present",
+        },
+      ]);
+
+      if (error) {
+        console.error("❌ Supabase insert error:", error.message);
+        return res.sendStatus(500);
+      }
+
+      // 3. Send reply with name
+      sendMessage(
+        phone,
+        `✅ ${user.name}, your attendance is marked!\n📸 Upload your selfie here: https://example.com/upload`
+      );
+    }
+
     res.sendStatus(200);
   } else {
     res.sendStatus(404);
   }
 });
-
 
 
 function sendMessage(to, text) {
