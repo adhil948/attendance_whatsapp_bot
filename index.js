@@ -87,6 +87,7 @@ app.post("/webhook", async (req, res) => {
           phone: phone,
           name: user.name,
           status: "present",
+          timestamp: new Date().toISOString(),
         },
       ]);
 
