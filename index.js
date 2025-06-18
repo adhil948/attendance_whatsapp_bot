@@ -104,16 +104,16 @@ app.post("/webhook", async (req, res) => {
     }
     if (text === "view today") {
    //fetch role
-  const { data: user, error: userError } = await supabase
-    .from("users")
-    .select("role")
-    .eq("phone", phone)
-    .single();
+      const { data: user, error: userError } = await supabase
+        .from("users")
+        .select("role")
+        .eq("phone", phone)
+        .single();
 
-  if (!sender || senderError || !["admin", "owner"].includes(sender.role)) {
-  sendMessage(phone, "⛔ You are not authorized to use this command.");
-  return res.sendStatus(200);
-  }
+      if (!sender || senderError || !["admin", "owner"].includes(sender.role)) {
+        sendMessage(phone, "⛔ You are not authorized to use this command.");
+        return res.sendStatus(200);
+      }
   // Get all users
   const { data: users, error: usersError } = await supabase
     .from("users")
@@ -166,16 +166,16 @@ app.post("/webhook", async (req, res) => {
     return res.sendStatus(200);
   }
   // Fetch sender's role
-const { data: sender, error: senderError } = await supabase
-  .from("users")
-  .select("role")
-  .eq("phone", phone)
-  .single();
+    const { data: sender, error: senderError } = await supabase
+      .from("users")
+      .select("role")
+      .eq("phone", phone)
+      .single();
 
-if (!sender || senderError || !["admin", "owner"].includes(sender.role)) {
-  sendMessage(phone, "⛔ You are not authorized to use this command.");
-  return res.sendStatus(200);
-}
+    if (!sender || senderError || !["admin", "owner"].includes(sender.role)) {
+      sendMessage(phone, "⛔ You are not authorized to use this command.");
+      return res.sendStatus(200);
+    }
 
   // 1. Get user by partial name match (case-insensitive)
   const { data: user, error: userError } = await supabase
