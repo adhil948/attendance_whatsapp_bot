@@ -56,7 +56,7 @@ app.post("/webhook", async (req, res) => {
       // Register the new user
       const { error } = await supabase
         .from("users")
-        .insert([{ name, phone }]);
+        .insert([{ name, phone, role: "employee" }]);
 
       if (error) {
         console.error("❌ Registration failed:", error.message);
@@ -103,6 +103,17 @@ app.post("/webhook", async (req, res) => {
       );
     }
     if (text === "view today") {
+   //fetch role
+  const { data: user, error: userError } = await supabase
+    .from("users")
+    .select("role")
+    .eq("phone", phone)
+    .single();
+
+  if (!sender || senderError || !["admin", "owner"].includes(sender.role)) {
+  sendMessage(phone, "⛔ You are not authorized to use this command.");
+  return res.sendStatus(200);
+  }
   // Get all users
   const { data: users, error: usersError } = await supabase
     .from("users")
