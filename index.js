@@ -165,6 +165,17 @@ app.post("/webhook", async (req, res) => {
     sendMessage(phone, "⚠️ Please provide the employee's name.\n\nExample:\nsummary adil");
     return res.sendStatus(200);
   }
+  // Fetch sender's role
+const { data: sender, error: senderError } = await supabase
+  .from("users")
+  .select("role")
+  .eq("phone", phone)
+  .single();
+
+if (!sender || senderError || !["admin", "owner"].includes(sender.role)) {
+  sendMessage(phone, "⛔ You are not authorized to use this command.");
+  return res.sendStatus(200);
+}
 
   // 1. Get user by partial name match (case-insensitive)
   const { data: user, error: userError } = await supabase
