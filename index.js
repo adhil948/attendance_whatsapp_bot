@@ -102,6 +102,52 @@ app.post("/webhook", async (req, res) => {
         `✅ ${user.name}, your attendance is marked!\n📸 Upload your selfie here: https://example.com/upload`
       );
     }
+    if (text === "view today") {
+  // Get all users
+  const { data: users, error: usersError } = await supabase
+    .from("users")
+    .select("name, phone");
+
+  if (usersError || !users) {
+    sendMessage(phone, "❌ Failed to fetch users.");
+    return res.sendStatus(200);
+  }
+
+  // Get today's attendance
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, "0");
+  const dd = String(today.getDate()).padStart(2, "0");
+  const todayStr = `${yyyy}-${mm}-${dd}`;
+
+  const { data: attendanceToday, error: attendanceError } = await supabase
+    .from("attendance")
+    .select("phone")
+    .gte("timestamp", `${todayStr}T00:00:00`)
+    .lte("timestamp", `${todayStr}T23:59:59`);
+
+  if (attendanceError || !attendanceToday) {
+    sendMessage(phone, "❌ Failed to fetch today's attendance.");
+    return res.sendStatus(200);
+  }
+
+  const presentPhones = attendanceToday.map((a) => a.phone);
+
+  // Build the message
+  let message = `📅 *Today's Attendance:*\n`;
+
+  users.forEach((user) => {
+    if (presentPhones.includes(user.phone)) {
+      message += `✅ ${user.name} - Present\n`;
+    } else {
+      message += `❌ ${user.name} - Absent\n`;
+    }
+  });
+
+  sendMessage(phone, message);
+  return res.sendStatus(200);
+}
+
 
     res.sendStatus(200);
   } else {
