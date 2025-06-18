@@ -1,19 +1,20 @@
 const express = require("express");
 const bodyParser = require("body-parser");
-const supabase = require("./supabaseClient"); // Assuming you have a supabaseClient.js file
-require("dotenv").config();
-
+require(".env").config();
 const app = express();
 app.use(bodyParser.json());
 
-app.get("/webhook", (req, res) => {
-  const verify_token = process.env.VERIFY_TOKEN;
+const registerHandler = require("./handlers/registerHandler");
+const attendanceHandler = require("./handlers/attendanceHandler");
+const viewTodayHandler = require("./handlers/viewTodayHandler");
+const summaryHandler = require("./handlers/summaryHandler");
 
+app.get("/webhook", (req, res) => {
   const mode = req.query["hub.mode"];
   const token = req.query["hub.verify_token"];
   const challenge = req.query["hub.challenge"];
 
-  if (mode && token && mode === "subscribe" && token === verify_token) {
+  if (mode === "subscribe" && token === process.env.VERIFY_TOKEN) {
     console.log("WEBHOOK_VERIFIED");
     res.status(200).send(challenge);
   } else {
@@ -21,247 +22,20 @@ app.get("/webhook", (req, res) => {
   }
 });
 
-
 app.post("/webhook", async (req, res) => {
-  const body = req.body;
+  const message = req.body?.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
+  const phone = message?.from;
+  const text = message?.text?.body?.toLowerCase();
 
-  if (body.object) {
-    const message = body.entry?.[0]?.changes?.[0]?.value?.messages?.[0];
-    const phone = message?.from;
-    const text = message?.text?.body?.toLowerCase();
+  if (!text || !phone) return res.sendStatus(200);
 
-    if (!text || !phone) return res.sendStatus(200);
-
-    // ✅ REGISTER Command
-    if (text.startsWith("register")) {
-      const name = message.text.body.slice(9).trim(); // Remove "register " and get the name
-
-      if (!name) {
-        sendMessage(phone, "⚠️ Please provide your name.\n\nFormat:\nregister Adil Shahan");
-        return res.sendStatus(200);
-      }
-
-      // Check if already registered
-      const { data: existingUser, error: userError } = await supabase
-        .from("users")
-        .select("*")
-        .eq("phone", phone)
-        .single();
-
-      if (existingUser) {
-        sendMessage(phone, `⚠️ You're already registered as ${existingUser.name}`);
-        return res.sendStatus(200);
-      }
-
-      // Register the new user
-      const { error } = await supabase
-        .from("users")
-        .insert([{ name, phone, role: "employee" }]);
-
-      if (error) {
-        console.error("❌ Registration failed:", error.message);
-        sendMessage(phone, "❌ Something went wrong while registering.");
-      } else {
-        sendMessage(phone, `✅ ${name}, you have been registered successfully!`);
-      }
-
-      return res.sendStatus(200);
-    }
-
-    if (text === "present") {
-      // 1. Get user by phone number
-      const { data: user, error: userError } = await supabase
-        .from("users")
-        .select("name")
-        .eq("phone", phone)
-        .single();
-
-      if (userError || !user) {
-        sendMessage(phone, "⚠️ Your number is not registered. Please contact admin.");
-        return res.sendStatus(200);
-      }
-
-      // 2. Save to attendance table
-      const { error } = await supabase.from("attendance").insert([
-        {
-          phone: phone,
-          name: user.name,
-          status: "present",
-          timestamp: new Date().toISOString(),
-        },
-      ]);
-
-      if (error) {
-        console.error("❌ Supabase insert error:", error.message);
-        return res.sendStatus(500);
-      }
-
-      // 3. Send reply with name
-      sendMessage(
-        phone,
-        `✅ ${user.name}, your attendance is marked!\n📸 Upload your selfie here: https://example.com/upload`
-      );
-    }
-    if (text === "view today") {
-   //fetch role
-      const { data: sender, error: senderError } = await supabase
-        .from("users")
-        .select("role")
-        .eq("phone", phone)
-        .single();
-
-      if (!sender || senderError || !["admin", "owner"].includes(sender.role)) {
-        sendMessage(phone, "⛔ You are not authorized to use this command.");
-        return res.sendStatus(200);
-      }
-  // Get all users
-  const { data: users, error: usersError } = await supabase
-    .from("users")
-    .select("name, phone");
-
-  if (usersError || !users) {
-    sendMessage(phone, "❌ Failed to fetch users.");
-    return res.sendStatus(200);
-  }
-
-  // Get today's attendance
-  const today = new Date();
-  const yyyy = today.getFullYear();
-  const mm = String(today.getMonth() + 1).padStart(2, "0");
-  const dd = String(today.getDate()).padStart(2, "0");
-  const todayStr = `${yyyy}-${mm}-${dd}`;
-
-  const { data: attendanceToday, error: attendanceError } = await supabase
-    .from("attendance")
-    .select("phone")
-    .gte("timestamp", `${todayStr}T00:00:00`)
-    .lte("timestamp", `${todayStr}T23:59:59`);
-
-  if (attendanceError || !attendanceToday) {
-    sendMessage(phone, "❌ Failed to fetch today's attendance.");
-    return res.sendStatus(200);
-  }
-
-  const presentPhones = attendanceToday.map((a) => a.phone);
-
-  // Build the message
-  let message = `📅 *Today's Attendance (${todayStr}):*\n`;
-
-  users.forEach((user) => {
-    if (presentPhones.includes(user.phone)) {
-      message += `✅ ${user.name} - Present\n`;
-    } else {
-      message += `❌ ${user.name} - Absent\n`;
-    }
-  });
-
-  sendMessage(phone, message);
-  return res.sendStatus(200);
-}
-  if (text.startsWith("summary")) {
-  const nameQuery = text.slice(7).trim(); // remove 'summary' and get the name
-
-  if (!nameQuery) {
-    sendMessage(phone, "⚠️ Please provide the employee's name.\n\nExample:\nsummary adil");
-    return res.sendStatus(200);
-  }
-  // Fetch sender's role
-    const { data: sender, error: senderError } = await supabase
-      .from("users")
-      .select("role")
-      .eq("phone", phone)
-      .single();
-
-    if (!sender || senderError || !["admin", "owner"].includes(sender.role)) {
-      sendMessage(phone, "⛔ You are not authorized to use this command.");
-      return res.sendStatus(200);
-    }
-
-  // 1. Get user by partial name match (case-insensitive)
-  const { data: user, error: userError } = await supabase
-    .from("users")
-    .select("name, phone")
-    .ilike("name", `%${nameQuery}%`)
-    .maybeSingle();
-
-  if (!user) {
-    sendMessage(phone, `❌ No user found with name "${nameQuery}"`);
-    return res.sendStatus(200);
-  }
-
-  const userPhone = user.phone;
-
-  // 2. Get current month range
-  const today = new Date();
-  const yyyy = today.getFullYear();
-  const mm = String(today.getMonth() + 1).padStart(2, "0");
-  const firstDay = `${yyyy}-${mm}-01`;
-  const lastDay = new Date(yyyy, today.getMonth() + 1, 0); // last date of month
-  const lastDayStr = `${yyyy}-${mm}-${String(lastDay.getDate()).padStart(2, "0")}`;
-
-  // 3. Get attendance records for that user this month
-  const { data: attendance, error: attError } = await supabase
-    .from("attendance")
-    .select("timestamp")
-    .eq("phone", userPhone)
-    .gte("timestamp", `${firstDay}T00:00:00`)
-    .lte("timestamp", `${lastDayStr}T23:59:59`);
-
-  if (attError) {
-    sendMessage(phone, "❌ Failed to fetch attendance data.");
-    return res.sendStatus(200);
-  }
-
-  // 4. Count unique present days
-  const presentDates = new Set(
-    attendance.map((a) => a.timestamp.split("T")[0]) // Extract date part
-  );
-
-  const presentCount = presentDates.size;
-  const totalDaysInMonth = lastDay.getDate(); // e.g. 30
-  const absentCount = totalDaysInMonth - presentCount; // optional: skip Sundays
-
-  // 5. Reply
-  sendMessage(
-    phone,
-    `📊 ${today.toLocaleString("default", { month: "long" })} Summary for ${user.name}:\n` +
-    `✅ Present Days: ${presentCount}\n` +
-    `❌ Absent Days: ${absentCount}`
-  );
+  if (text.startsWith("register")) await registerHandler(phone, text);
+  else if (text === "present") await attendanceHandler(phone);
+  else if (text === "view today") await viewTodayHandler(phone);
+  else if (text.startsWith("summary")) await summaryHandler(phone, text);
 
   return res.sendStatus(200);
-}
-
-    res.sendStatus(200);
-  } else {
-    res.sendStatus(404);
-  }
 });
 
-
-function sendMessage(to, text) {
-    console.log("📤 Attempting to send WhatsApp message to", to);
-  const axios = require("axios");
-  axios.post(
-    `https://graph.facebook.com/v19.0/${process.env.PHONE_NUMBER_ID}/messages`,
-    {
-      messaging_product: "whatsapp",
-      to: to,
-      text: { body: text },
-    },
-    {
-      headers: {
-        Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
-        "Content-Type": "application/json",
-      },
-    }
-  ).then(res => {
-    console.log("Message sent successfully:", res.data);
-  }).catch(err => {
-    console.error("Error sending message:", err.response?.data || err.message);
-  });
-}
-
-
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Running on port ${PORT}`));
+app.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
